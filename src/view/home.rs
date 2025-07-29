@@ -9,6 +9,10 @@ pub async fn root(grid: &Grid) -> Markup {
                 (grid)
             }
         }
+        // Placeholder for dialogs
+        div #dialog-container {
+
+        }
         div .padding .absolute .bottom .right {
             button hx-delete="/reset" hx-swap="innerHTML" hx-target="#grid-container" .extend .square .round  {
                 i { "replay" }

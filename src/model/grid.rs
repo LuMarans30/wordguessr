@@ -1,43 +1,42 @@
 use crate::model::row::Row;
 
+#[derive(Clone)]
 pub struct Grid {
     pub rows: Vec<Row>,
-    word_length: usize,
     pub current_row: usize,
+    num_rows: usize,
 }
 
 impl Grid {
-    pub fn new(tries: usize, word_length: usize) -> Self {
-        let current_row = 0;
-        let rows = (0..tries)
-            .map(|i| Row::new(word_length, i != current_row))
+    pub fn new(num_rows: usize, word_length: usize) -> Self {
+        let rows = (0..num_rows)
+            .map(|i| Row::new(word_length, i != 0))
             .collect();
+
         Self {
             rows,
-            word_length,
-            current_row,
+            current_row: 0,
+            num_rows,
         }
     }
 
-    pub fn set_next_row(&mut self) {
-        self.rows[self.current_row].is_disabled = true;
-        if self.current_row < self.rows.len() - 1 {
-            self.current_row += 1;
-            self.rows[self.current_row].is_disabled = false;
-        }
+    pub fn can_advance(&self) -> bool {
+        self.current_row < self.num_rows - 1
     }
 
-    pub fn reset(&mut self) {
-        self.current_row = 0;
-        for row in &mut self.rows {
-            *row = Row::new(self.word_length, true);
+    pub fn advance_row(&mut self) -> Result<(), GridError> {
+        self.rows[self.current_row].set_disabled(true);
+        if !self.can_advance() {
+            return Err(GridError::NoMoreRows);
         }
-        self.rows[self.current_row].is_disabled = false;
+
+        self.current_row += 1;
+        self.rows[self.current_row].set_disabled(false);
+        Ok(())
     }
 }
 
-impl Default for Grid {
-    fn default() -> Self {
-        Self::new(5, 5)
-    }
+#[derive(Debug)]
+pub enum GridError {
+    NoMoreRows,
 }
