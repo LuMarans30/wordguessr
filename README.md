@@ -1,8 +1,8 @@
 # WordGuessr
 
-![webpage demo](image.png)
-
 A web-based word guessing game built with [Rust](https://www.rust-lang.org/), [Axum](https://github.com/tokio-rs/axum), [Maud](https://maud.lambda.xyz/), and [HTMX](https://htmx.org/)
+
+![webpage demo](image.png)
 
 ## Features
 
