@@ -68,16 +68,12 @@ impl InputController {
     }
 
     fn render_meanings_list(&self, word: &Word) -> Markup {
-        if word.metadata.meanings.is_empty() {
-            return html! {};
-        }
-
         html! {
             p {
                 {"Definitions of "(word.word)": "}
                 br;
                 ul {
-                    @for meaning in &word.metadata.meanings {
+                    @for meaning in &word.meanings {
                         li { (meaning) }
                     }
                 }

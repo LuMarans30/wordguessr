@@ -1,54 +1,46 @@
 use async_trait::async_trait;
+use color_eyre::Result;
 use color_eyre::eyre::OptionExt;
-use color_eyre::{Result, eyre::eyre};
 use rand::seq::IndexedRandom;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Display;
 
 #[derive(Deserialize, Clone)]
-pub struct WordMetadata {
-    #[serde(rename = "MEANINGS", deserialize_with = "deserialize_meanings")]
-    pub meanings: Vec<String>,
-    #[serde(rename = "ANTONYMS")]
-    pub antonyms: Vec<String>,
-    #[serde(rename = "SYNONYMS")]
-    pub synonyms: Vec<String>,
+pub struct WordData {
+    #[serde(deserialize_with = "deserialize_words")]
+    pub words: Vec<Word>,
 }
 
-// Custom deserializer for meanings
+// Custom deserializer for json words
 /*
 {
-    "WORD": {
-        "MEANINGS": [
-            [
-                "Type",
-                "Definition",
-            ],
-            ...
-        ],
-        "ANTONYMS": [],
-        "SYNONYMS": []
-    },
-  ...
+    "word": "definition",
+    ...
 }
 */
-fn deserialize_meanings<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn deserialize_words<'de, D>(deserializer: D) -> Result<Vec<Word>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let arrays: Vec<Vec<serde_json::Value>> = Deserialize::deserialize(deserializer)?;
+    let arrays: HashMap<String, String> = Deserialize::deserialize(deserializer)?;
+
     Ok(arrays
         .iter()
-        .filter_map(|arr| arr.get(1)?.as_str())
-        .map(String::from)
-        .collect())
+        .map(|(word, meanings)| {
+            let meanings: Vec<String> = meanings.split("--").map(str::to_string).collect();
+            Word {
+                word: word.to_string().to_ascii_uppercase(),
+                meanings,
+            }
+        })
+        .collect::<Vec<Word>>())
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Word {
     pub word: String,
-    pub metadata: WordMetadata,
+    pub meanings: Vec<String>,
 }
 
 impl Display for Word {
@@ -60,43 +52,21 @@ impl Display for Word {
 #[async_trait]
 pub trait WordService: Send + Sync {
     async fn get_random_word(&self, length: usize) -> Result<Word>;
+    async fn get_words_by_length(&self, length: usize) -> Result<Vec<Word>>;
     async fn validate_word(&self, word: &str) -> Result<bool>;
-    async fn get_word_metadata(&self, word: &str) -> Result<WordMetadata>;
 }
 
 pub struct DictionaryService {
-    words_by_length: HashMap<usize, Vec<Word>>,
-    dictionary: HashMap<String, WordMetadata>,
+    dictionary: Vec<Word>,
 }
 
 impl DictionaryService {
     pub async fn new() -> Result<Self> {
-        // Load and parse JSON file (try from URL, otherwise read from local file)
-        let json_str: std::result::Result< HashMap<String, WordMetadata>, reqwest::Error> = reqwest::get("https://raw.githubusercontent.com/nightblade9/simple-english-dictionary/refs/heads/main/processed/filtered.json").await?.json().await;
-        let dictionary: HashMap<String, WordMetadata> = json_str.unwrap_or(serde_json::from_str(
-            include_str!("../assets/english_wordlist.json"),
-        )?);
-
-        // Precompute words by length
-        let mut words_by_length = HashMap::new();
-        for (word, metadata) in dictionary.iter() {
-            if !word.chars().all(|c| c.is_ascii_alphabetic()) {
-                continue;
-            }
-
-            let len = word.len();
-            words_by_length
-                .entry(len)
-                .or_insert_with(Vec::new)
-                .push(Word {
-                    word: word.to_string(),
-                    metadata: metadata.clone(),
-                });
-        }
+        // Load and parse JSON file
+        let dictionary: WordData = serde_json::from_str(include_str!("../assets/dictionary.json"))?;
 
         Ok(Self {
-            words_by_length,
-            dictionary,
+            dictionary: dictionary.words,
         })
     }
 }
@@ -104,10 +74,7 @@ impl DictionaryService {
 #[async_trait]
 impl WordService for DictionaryService {
     async fn get_random_word(&self, length: usize) -> Result<Word> {
-        let words = self
-            .words_by_length
-            .get(&length)
-            .ok_or_eyre(format!("No words of length {length}"))?;
+        let words = self.get_words_by_length(length).await?;
 
         let word = words
             .choose(&mut rand::rng())
@@ -117,14 +84,18 @@ impl WordService for DictionaryService {
     }
 
     async fn validate_word(&self, word: &str) -> Result<bool> {
-        Ok(self.dictionary.contains_key(&word.to_ascii_uppercase()))
-    }
-
-    async fn get_word_metadata(&self, word: &str) -> Result<WordMetadata> {
         Ok(self
             .dictionary
-            .get(&word.to_ascii_uppercase())
+            .iter()
+            .any(|w| w.word == word.to_ascii_uppercase()))
+    }
+
+    async fn get_words_by_length(&self, length: usize) -> Result<Vec<Word>> {
+        Ok(self
+            .dictionary
+            .iter()
+            .filter(|x: &&Word| x.word.len() == length)
             .cloned()
-            .ok_or_else(|| eyre!("No metadata available for word {}", word))?)
+            .collect())
     }
 }
