@@ -64,7 +64,6 @@ async fn create_app_state(args: Args) -> Result<AppState> {
 
     // Create initial game state
     let secret_word = word_service.get_random_word(args.word_length).await?;
-    println!("Secret word: {secret_word}");
 
     let game_state = Arc::new(RwLock::new(GameState::new(
         secret_word,
