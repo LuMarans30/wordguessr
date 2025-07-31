@@ -10,7 +10,7 @@ impl Render for Row {
                     (cell)
                 }
 
-                button ws-send="input" disabled[self.is_disabled()] .transparent .circle hx-include="input" hx-swap="innerHTML" hx-target="#grid-container"{
+                button ws-send="input" disabled[self.is_disabled()] .transparent .circle hx-include="input" hx-swap-oob="true" hx-target="grid-container" {
                     i { "arrow_forward" }
                 }
             }

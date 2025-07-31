@@ -107,7 +107,7 @@ async fn initialize_server(app_state: AppState) -> Result<()> {
         .route("/ws", any(ws_handler))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
     println!("🚀 Server running on http://{}", listener.local_addr()?);
 
     axum::serve(
@@ -130,8 +130,11 @@ async fn ws_handler(
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr, mut state: Arc<AppState>) {
     // Main message loop
     while let Some(Ok(msg)) = socket.next().await {
-        if process_message(&mut state, msg, who).await.is_break() {
-            return;
+        match process_message(&mut state, msg, who).await {
+            ControlFlow::Break(()) => break,
+            ControlFlow::Continue(html) => {
+                socket.send(Message::Text(html.0.into())).await.unwrap();
+            }
         }
     }
 }
@@ -141,20 +144,14 @@ async fn process_message(
     state: &mut Arc<AppState>,
     msg: Message,
     who: SocketAddr,
-) -> ControlFlow<(), ()> {
+) -> ControlFlow<(), Html<String>> {
+    let mut markup = Html("".to_string());
     match msg {
         Message::Text(t) => {
             println!(">>> {who} sent str: {t:?}");
             if let Ok(input) = serde_json::from_str::<RowElements>(&t) {
                 let mut game_state = state.game_state.write().await;
                 dbg!(&input);
-                /*                 dbg!(
-                    state
-                        .input_controller
-                        .handle_input(&state.game_state, input.input)
-                        .await
-                        .unwrap()
-                ); */
 
                 let result = state
                     .game_controller
@@ -164,9 +161,16 @@ async fn process_message(
 
                 dbg!(result);
                 dbg!(&game_state.grid);
+
+                markup = Html(
+                    state
+                        .input_controller
+                        .render_game_state(&game_state)
+                        .into_string(),
+                );
             } else if serde_json::from_str::<ResetMsg>(&t).is_ok() {
                 let result = reset_game(state).await.unwrap();
-                dbg!(result.into_string());
+                markup = Html(result.into_string());
             }
         }
         Message::Close(c) => {
@@ -182,7 +186,7 @@ async fn process_message(
         }
         _ => unreachable!(),
     }
-    ControlFlow::Continue(())
+    ControlFlow::Continue(markup)
 }
 
 async fn root_handler(State(state): State<AppState>) -> Html<String> {
@@ -201,27 +205,6 @@ async fn render_root(state: &AppState) -> Result<Markup> {
     );
     Ok(layout.render())
 }
-
-async fn input_handler(
-    State(state): State<AppState>,
-    Form(params): Form<RowElements>,
-) -> Html<String> {
-    match state
-        .input_controller
-        .handle_input(&state.game_state, params.input)
-        .await
-    {
-        Ok(markup) => Html(markup.into_string()),
-        Err(_) => Html(render_game_error().into_string()),
-    }
-}
-
-/* async fn reset_handler(State(mut state): State<AppState>) -> Html<String> {
-    match reset_game(&mut state).await {
-        Ok(markup) => Html(markup.into_string()),
-        Err(_) => Html(render_game_error().into_string()),
-    }
-} */
 
 async fn reset_game(state: &mut Arc<AppState>) -> Result<Markup> {
     let (word_length, num_tries) = {
@@ -262,19 +245,4 @@ fn render_error_page(message: &str) -> Markup {
         "💬 WordGuessr - Error".into(),
     );
     layout.render()
-}
-
-fn render_game_error() -> Markup {
-    use maud::html;
-
-    html! {
-        div .container .center-align {
-            div .error .padding {
-                p { "Something went wrong. Please try again." }
-                button hx-get="/" hx-swap="outerHTML" hx-target="body" .primary {
-                    "Refresh Game"
-                }
-            }
-        }
-    }
 }
