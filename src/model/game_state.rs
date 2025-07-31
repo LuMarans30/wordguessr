@@ -13,7 +13,7 @@ pub struct GameState {
     pub current_dialog: Option<Dialog>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum GameStatus {
     Playing,
     Won,
