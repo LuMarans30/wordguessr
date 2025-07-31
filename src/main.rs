@@ -1,22 +1,32 @@
-use std::{net::SocketAddr, sync::Arc};
-
 use axum::{
     Router,
-    extract::State,
-    response::Html,
-    routing::{delete, get, put},
+    extract::{
+        ConnectInfo, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
+    response::{Html, IntoResponse},
+    routing::{any, delete, get, put},
 };
-
 use axum_extra::extract::Form;
-use clap::Parser;
-use maud::{Markup, Render};
+use clap::{Parser, command};
+use maud::{Markup, Render, html};
 use serde::Deserialize;
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+use std::{collections::HashMap, net::SocketAddr};
+use std::{ops::ControlFlow, sync::Arc};
+
+//allows to split the websocket stream into separate TX and RX branches
+use futures_util::stream::StreamExt;
 
 use color_eyre::Result;
 
 use crate::{
-    controller::{game_controller::GameController, input_controller::InputController},
+    controller::{
+        game_controller::{self, GameController},
+        input_controller::InputController,
+    },
     model::game_state::GameState,
     service::dictionary::{DictionaryService, WordService},
     view::{home::root, layout::Layout},
@@ -38,14 +48,20 @@ struct Args {
     num_tries: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct RowElements {
     #[serde(rename = "input[]")]
     input: Vec<char>,
 }
 
+#[derive(Deserialize, Debug)]
+struct ResetMsg {
+    reset: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
+    pub sessions: Arc<RwLock<HashMap<Uuid, GameState>>>,
     pub game_state: Arc<RwLock<GameState>>,
     pub input_controller: Arc<InputController>,
     pub game_controller: Arc<GameController>,
@@ -75,7 +91,10 @@ async fn create_app_state(args: Args) -> Result<AppState> {
     let game_controller = Arc::new(GameController::new(word_service));
     let input_controller = Arc::new(InputController::new(Arc::clone(&game_controller)));
 
+    let sessions = Arc::new(RwLock::new(HashMap::new()));
+
     Ok(AppState {
+        sessions,
         game_state,
         input_controller,
         game_controller,
@@ -85,17 +104,85 @@ async fn create_app_state(args: Args) -> Result<AppState> {
 async fn initialize_server(app_state: AppState) -> Result<()> {
     let app = Router::new()
         .route("/", get(root_handler))
-        .route("/input", put(input_handler))
-        .route("/reset", delete(reset_handler))
+        .route("/ws", any(ws_handler))
         .with_state(app_state);
 
-    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    let listener = TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
+    println!("🚀 Server running on http://{}", listener.local_addr()?);
 
-    println!("🚀 Server running on http://{addr}");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
-    axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.into()))
+}
+
+async fn handle_socket(mut socket: WebSocket, who: SocketAddr, mut state: Arc<AppState>) {
+    // Main message loop
+    while let Some(Ok(msg)) = socket.next().await {
+        if process_message(&mut state, msg, who).await.is_break() {
+            return;
+        }
+    }
+}
+
+/// helper to print contents of messages to stdout. Has special treatment for Close.
+async fn process_message(
+    state: &mut Arc<AppState>,
+    msg: Message,
+    who: SocketAddr,
+) -> ControlFlow<(), ()> {
+    match msg {
+        Message::Text(t) => {
+            println!(">>> {who} sent str: {t:?}");
+            if let Ok(input) = serde_json::from_str::<RowElements>(&t) {
+                let mut game_state = state.game_state.write().await;
+                dbg!(&input);
+                /*                 dbg!(
+                    state
+                        .input_controller
+                        .handle_input(&state.game_state, input.input)
+                        .await
+                        .unwrap()
+                ); */
+
+                let result = state
+                    .game_controller
+                    .process_guess(&mut game_state, input.input)
+                    .await
+                    .unwrap();
+
+                dbg!(result);
+                dbg!(&game_state.grid);
+            } else if serde_json::from_str::<ResetMsg>(&t).is_ok() {
+                let result = reset_game(state).await.unwrap();
+                dbg!(result.into_string());
+            }
+        }
+        Message::Close(c) => {
+            if let Some(cf) = c {
+                println!(
+                    ">>> {who} sent close with code {} and reason `{}`",
+                    cf.code, cf.reason
+                );
+            } else {
+                println!(">>> {who} somehow sent close message without CloseFrame");
+            }
+            return ControlFlow::Break(());
+        }
+        _ => unreachable!(),
+    }
+    ControlFlow::Continue(())
 }
 
 async fn root_handler(State(state): State<AppState>) -> Html<String> {
@@ -129,14 +216,14 @@ async fn input_handler(
     }
 }
 
-async fn reset_handler(State(mut state): State<AppState>) -> Html<String> {
+/* async fn reset_handler(State(mut state): State<AppState>) -> Html<String> {
     match reset_game(&mut state).await {
         Ok(markup) => Html(markup.into_string()),
         Err(_) => Html(render_game_error().into_string()),
     }
-}
+} */
 
-async fn reset_game(state: &mut AppState) -> Result<Markup> {
+async fn reset_game(state: &mut Arc<AppState>) -> Result<Markup> {
     let (word_length, num_tries) = {
         let game_state = state.game_state.read().await;
         (game_state.word_length, game_state.num_tries)

@@ -1,6 +1,6 @@
 use crate::model::cell::Cell;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Row {
     pub cells: Vec<Cell>,
     is_disabled: bool,

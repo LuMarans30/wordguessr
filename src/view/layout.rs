@@ -24,6 +24,7 @@ impl Layout {
             script type="module" src="https://cdn.jsdelivr.net/npm/beercss@latest/dist/cdn/beer.min.js" {}
             script type="module" src="https://cdn.jsdelivr.net/npm/material-dynamic-colors@latest/dist/cdn/material-dynamic-colors.min.js" {}
             script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js" {}
+            script src="https://cdn.jsdelivr.net/npm/htmx-ext-ws@2.0.2" {}
 
             title { (self.webpage_title) }
         }
@@ -48,7 +49,7 @@ impl Render for Layout {
                 head {
                     (self.head())
                 }
-                body {
+                body hx-ext="ws" ws-connect="/ws" {
                     (self.appbar())
                     main .responsive {
                         (self.markup)

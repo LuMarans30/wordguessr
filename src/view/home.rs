@@ -14,7 +14,7 @@ pub async fn root(grid: &Grid) -> Markup {
 
         }
         div .padding .absolute .bottom .right {
-            button hx-delete="/reset" hx-swap="innerHTML" hx-target="#grid-container" .extend .square .round  {
+            button ws-send="reset" hx-vals="{\"reset\": \"reset\"}" hx-swap="innerHTML" hx-target="#grid-container" .extend .square .round  {
                 i { "replay" }
                 span { "Replay" }
             }

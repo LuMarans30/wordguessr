@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum CellState {
     Empty,
     Correct,
@@ -8,7 +8,7 @@ pub enum CellState {
     Absent,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cell {
     pub letter: Option<char>,
     pub state: CellState,

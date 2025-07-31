@@ -1,6 +1,6 @@
 use crate::model::row::Row;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Grid {
     pub rows: Vec<Row>,
     pub current_row: usize,

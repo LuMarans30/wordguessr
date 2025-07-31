@@ -3,7 +3,7 @@ use crate::{
     service::dictionary::Word,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GameState {
     pub grid: Grid,
     pub secret_word: Word,
@@ -13,7 +13,7 @@ pub struct GameState {
     pub current_dialog: Option<Dialog>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum GameStatus {
     Playing,
     Won,
