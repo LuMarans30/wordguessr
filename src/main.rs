@@ -5,9 +5,8 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::{Html, IntoResponse},
-    routing::{any, delete, get, put},
+    routing::get,
 };
-use axum_extra::extract::Form;
 use clap::{Parser, command};
 use maud::{Markup, Render, html};
 use serde::Deserialize;
@@ -23,11 +22,8 @@ use futures_util::stream::StreamExt;
 use color_eyre::Result;
 
 use crate::{
-    controller::{
-        game_controller::{self, GameController},
-        input_controller::InputController,
-    },
-    model::game_state::GameState,
+    controller::{game_controller::{self, GameController}, input_controller::InputController},
+    model::{game_state::GameState, grid::Grid},
     service::dictionary::{DictionaryService, WordService},
     view::{home::root, layout::Layout},
 };
@@ -62,7 +58,6 @@ struct ResetMsg {
 #[derive(Clone)]
 pub struct AppState {
     pub sessions: Arc<RwLock<HashMap<Uuid, GameState>>>,
-    pub game_state: Arc<RwLock<GameState>>,
     pub input_controller: Arc<InputController>,
     pub game_controller: Arc<GameController>,
 }
@@ -78,24 +73,24 @@ async fn create_app_state(args: Args) -> Result<AppState> {
     // Create word service
     let word_service: Arc<dyn WordService> = Arc::new(DictionaryService::new().await?);
 
-    // Create initial game state
-    let secret_word = word_service.get_random_word(args.word_length).await?;
-
-    let game_state = Arc::new(RwLock::new(GameState::new(
-        secret_word,
-        args.num_tries,
-        args.word_length,
-    )));
-
     // Create controllers
     let game_controller = Arc::new(GameController::new(word_service));
     let input_controller = Arc::new(InputController::new(Arc::clone(&game_controller)));
 
-    let sessions = Arc::new(RwLock::new(HashMap::new()));
+    let sessions = Arc::new(RwLock::new(HashMap::<Uuid, GameState>::new()));
+
+    //First session
+    let initial_session_id = Uuid::nil();
+    let initial_game_state = game_controller
+        .create_new_game(args.num_tries, args.word_length)
+        .await?;
+    sessions
+        .write()
+        .await
+        .insert(initial_session_id, initial_game_state);
 
     Ok(AppState {
         sessions,
-        game_state,
         input_controller,
         game_controller,
     })
@@ -104,7 +99,7 @@ async fn create_app_state(args: Args) -> Result<AppState> {
 async fn initialize_server(app_state: AppState) -> Result<()> {
     let app = Router::new()
         .route("/", get(root_handler))
-        .route("/ws", any(ws_handler))
+        .route("/ws", get(ws_handler))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
@@ -119,71 +114,70 @@ async fn initialize_server(app_state: AppState) -> Result<()> {
     Ok(())
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.into()))
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state.into()))
 }
 
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, mut state: Arc<AppState>) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
+    let (num_tries, word_length) = {
+        let sessions = state.sessions.read().await;
+        let first_game_state = sessions.get(&Uuid::nil()).expect("Can't find init session");
+        (first_game_state.num_tries, first_game_state.word_length)
+    };
+
+    let game_state = state.game_controller.create_new_game(num_tries, word_length).await.expect("Can't create new game");
+
+    let session_id = Uuid::new_v4();
+    {
+        let mut sessions = state.sessions.write().await;
+        sessions.insert(session_id, game_state);
+    }
+
     // Main message loop
     while let Some(Ok(msg)) = socket.next().await {
-        match process_message(&mut state, msg, who).await {
+        match process_message(&state, msg, session_id).await {
             ControlFlow::Break(()) => break,
             ControlFlow::Continue(html) => {
                 socket.send(Message::Text(html.0.into())).await.unwrap();
             }
         }
     }
+
+    // Clean up session when done
+    state.sessions.write().await.remove(&session_id);
 }
 
 /// helper to print contents of messages to stdout. Has special treatment for Close.
 async fn process_message(
-    state: &mut Arc<AppState>,
+    state: &Arc<AppState>,
     msg: Message,
-    who: SocketAddr,
+    session_id: Uuid,
 ) -> ControlFlow<(), Html<String>> {
     let mut markup = Html("".to_string());
     match msg {
         Message::Text(t) => {
-            println!(">>> {who} sent str: {t:?}");
             if let Ok(input) = serde_json::from_str::<RowElements>(&t) {
-                let mut game_state = state.game_state.write().await;
-                dbg!(&input);
+                let mut sessions = state.sessions.write().await;
+                if let Some(game_state) = sessions.get_mut(&session_id) {
+                    let result = state
+                        .game_controller
+                        .process_guess(game_state, input.input)
+                        .await
+                        .unwrap();
 
-                let result = state
-                    .game_controller
-                    .process_guess(&mut game_state, input.input)
-                    .await
-                    .unwrap();
-
-                dbg!(result);
-                dbg!(&game_state.grid);
-
-                markup = Html(
-                    state
-                        .input_controller
-                        .render_game_state(&game_state)
-                        .into_string(),
-                );
+                    markup = Html(
+                        state
+                            .input_controller
+                            .render_game_state(game_state)
+                            .into_string(),
+                    );
+                }
             } else if serde_json::from_str::<ResetMsg>(&t).is_ok() {
-                let result = reset_game(state).await.unwrap();
+                let result = reset_session_game(state, session_id).await.unwrap();
                 markup = Html(result.into_string());
             }
         }
-        Message::Close(c) => {
-            if let Some(cf) = c {
-                println!(
-                    ">>> {who} sent close with code {} and reason `{}`",
-                    cf.code, cf.reason
-                );
-            } else {
-                println!(">>> {who} somehow sent close message without CloseFrame");
-            }
-            return ControlFlow::Break(());
-        }
+        Message::Close(_) => return ControlFlow::Break(()),
         _ => unreachable!(),
     }
     ControlFlow::Continue(markup)
@@ -197,33 +191,41 @@ async fn root_handler(State(state): State<AppState>) -> Html<String> {
 }
 
 async fn render_root(state: &AppState) -> Result<Markup> {
-    let game_state = state.game_state.read().await;
+    let grid = {
+        state
+            .sessions
+            .read()
+            .await
+            .get(&Uuid::nil())
+            .expect("Can't find init session")
+            .grid
+            .clone()
+    };
+
     let layout = Layout::new(
-        root(&game_state.grid).await,
+        root(&grid).await,
         "WordGuessr".into(),
         "💬 WordGuessr".into(),
     );
     Ok(layout.render())
 }
 
-async fn reset_game(state: &mut Arc<AppState>) -> Result<Markup> {
-    let (word_length, num_tries) = {
-        let game_state = state.game_state.read().await;
-        (game_state.word_length, game_state.num_tries)
-    };
+async fn reset_session_game(state: &AppState, session_id: Uuid) -> Result<Markup> {
+    let sessions = state.sessions.read().await;
+    if let Some(mut game_state) = sessions.get(&session_id) {
+        let (word_length, num_tries) = { (game_state.word_length, game_state.num_tries) };
 
-    let new_game_state = state
-        .game_controller
-        .create_new_game(num_tries, word_length)
-        .await?;
+        let new_game_state = &state
+            .game_controller
+            .create_new_game(num_tries, word_length)
+            .await?;
 
-    {
-        let mut game_state = state.game_state.write().await;
-        *game_state = new_game_state;
+        game_state = new_game_state;
+
+        Ok(game_state.grid.render())
+    } else {
+        Err(color_eyre::eyre::eyre!("Session not found"))
     }
-
-    let game_state = state.game_state.read().await;
-    Ok(game_state.grid.render())
 }
 
 fn render_error_page(message: &str) -> Markup {
