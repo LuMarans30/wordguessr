@@ -1,7 +1,7 @@
 use axum::{
     Router,
     extract::{
-        ConnectInfo, State,
+        State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::{Html, IntoResponse},
@@ -16,14 +16,13 @@ use uuid::Uuid;
 use std::{collections::HashMap, net::SocketAddr};
 use std::{ops::ControlFlow, sync::Arc};
 
-//allows to split the websocket stream into separate TX and RX branches
 use futures_util::stream::StreamExt;
 
 use color_eyre::Result;
 
 use crate::{
-    controller::{game_controller::{self, GameController}, input_controller::InputController},
-    model::{game_state::GameState, grid::Grid},
+    controller::{game_controller::GameController, input_controller::InputController},
+    model::game_state::GameState,
     service::dictionary::{DictionaryService, WordService},
     view::{home::root, layout::Layout},
 };
@@ -125,7 +124,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         (first_game_state.num_tries, first_game_state.word_length)
     };
 
-    let game_state = state.game_controller.create_new_game(num_tries, word_length).await.expect("Can't create new game");
+    let game_state = state
+        .game_controller
+        .create_new_game(num_tries, word_length)
+        .await
+        .expect("Can't create new game");
 
     let session_id = Uuid::new_v4();
     {
@@ -133,7 +136,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         sessions.insert(session_id, game_state);
     }
 
-    // Main message loop
     while let Some(Ok(msg)) = socket.next().await {
         match process_message(&state, msg, session_id).await {
             ControlFlow::Break(()) => break,
@@ -159,7 +161,7 @@ async fn process_message(
             if let Ok(input) = serde_json::from_str::<RowElements>(&t) {
                 let mut sessions = state.sessions.write().await;
                 if let Some(game_state) = sessions.get_mut(&session_id) {
-                    let result = state
+                    state
                         .game_controller
                         .process_guess(game_state, input.input)
                         .await
