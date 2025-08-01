@@ -8,9 +8,13 @@ impl Render for Message {
             div hx-swap-oob="innerHTML:#message-container" {
                 div .medium-line {
                     @if let GameStatus::Won | GameStatus::Lost = self.status {
-                        h5 { @if self.status == GameStatus::Won { "You've won" } @else { "You've lost!" } }
-                        br;
-                        p { "The secret word is: "(self.secret_word) }
+                        @if self.status == GameStatus::Won {
+                            h5 {"You've won"}
+                        } @else {
+                            h5 {"You've lost!"}
+                            br;
+                            p {"The secret word is: "(self.secret_word)}
+                        }
                         br;
                         p {
                             {"Definitions of "(self.secret_word.word)": "}
