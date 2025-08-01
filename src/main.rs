@@ -21,7 +21,7 @@ use futures_util::stream::StreamExt;
 use color_eyre::Result;
 
 use crate::{
-    controller::{game_controller::GameController, input_controller::InputController},
+    controller::game_controller::GameController,
     model::game_state::GameState,
     service::dictionary::{DictionaryService, WordService},
     view::layout::Layout,
@@ -52,7 +52,6 @@ struct RowElements {
 #[derive(Clone)]
 pub struct AppState {
     pub sessions: Arc<RwLock<HashMap<Uuid, GameState>>>,
-    pub input_controller: Arc<InputController>,
     pub game_controller: Arc<GameController>,
 }
 
@@ -69,7 +68,6 @@ async fn create_app_state(args: Args) -> Result<AppState> {
 
     // Create controllers
     let game_controller = Arc::new(GameController::new(word_service));
-    let input_controller = Arc::new(InputController::new(Arc::clone(&game_controller)));
 
     let sessions = Arc::new(RwLock::new(HashMap::<Uuid, GameState>::new()));
 
@@ -85,7 +83,6 @@ async fn create_app_state(args: Args) -> Result<AppState> {
 
     Ok(AppState {
         sessions,
-        input_controller,
         game_controller,
     })
 }
