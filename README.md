@@ -1,6 +1,6 @@
 # WordGuessr
 
-A web-based word guessing game built with [Axum](https://github.com/tokio-rs/axum), [Maud](https://maud.lambda.xyz/), and [HTMX](https://htmx.org/) with [WebSockets](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+A web-based word guessing game built with [Axum](https://github.com/tokio-rs/axum), [Maud](https://maud.lambda.xyz/), and [HTMX](https://htmx.org/) with [WebSockets](https://htmx.org/extensions/ws/)
 
 ![webpage demo](image.png)
 
