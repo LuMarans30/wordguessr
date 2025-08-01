@@ -1,7 +1,4 @@
-use crate::{
-    model::{dialog::Dialog, grid::Grid},
-    service::dictionary::Word,
-};
+use crate::{model::grid::Grid, service::dictionary::Word};
 
 #[derive(Clone, Debug)]
 pub struct GameState {
@@ -10,7 +7,6 @@ pub struct GameState {
     pub word_length: usize,
     pub num_tries: usize,
     pub status: GameStatus,
-    pub current_dialog: Option<Dialog>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -28,7 +24,6 @@ impl GameState {
             word_length,
             num_tries,
             status: GameStatus::Playing,
-            current_dialog: None,
         }
     }
 

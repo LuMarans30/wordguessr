@@ -24,7 +24,7 @@ use crate::{
     controller::{game_controller::GameController, input_controller::InputController},
     model::game_state::GameState,
     service::dictionary::{DictionaryService, WordService},
-    view::{home::root, layout::Layout},
+    view::layout::Layout,
 };
 
 mod controller;
@@ -116,21 +116,17 @@ async fn root_handler(State(state): State<AppState>) -> Html<String> {
 }
 
 async fn render_root(state: &AppState) -> Result<Markup> {
-    let grid = {
+    let game_state = {
         state
             .sessions
             .read()
             .await
             .get(&Uuid::nil())
             .expect("Can't find init session")
-            .grid
             .clone()
     };
 
-    let layout = Layout::new(
-        root(&grid).await,
-        "WordGuessr".into()
-    );
+    let layout = Layout::new(game_state.render(), "WordGuessr".into());
     Ok(layout.render())
 }
 

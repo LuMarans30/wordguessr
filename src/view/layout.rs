@@ -49,7 +49,7 @@ impl Render for Layout {
                 }
                 body hx-ext="ws" ws-connect="/ws" {
                     (self.appbar())
-                    main .responsive {
+                    main .responsive .container {
                         (self.markup)
                     }
                 }

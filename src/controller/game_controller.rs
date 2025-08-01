@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::{
     model::{
         cell::{Cell, CellState},
-        dialog::Dialog,
         game_state::{GameState, GameStatus},
         grid::GridError,
     },
@@ -38,15 +37,8 @@ impl GameController {
 
         // Validate if the word exists in the dictionary
         if !self.word_service.validate_word(&guess_word).await? {
-            game_state.current_dialog = Some(Dialog::warning_dialog(
-                "This word does not exist".to_string(),
-                true,
-            ));
             return Ok(GuessResult::InvalidWord);
         }
-
-        // Clear any dialog
-        game_state.current_dialog = None;
 
         // Update grid with guess
         let current_row = game_state.grid.current_row;
