@@ -2,7 +2,7 @@
 
 A web-based word guessing game built with [Axum](https://github.com/tokio-rs/axum), [Maud](https://maud.lambda.xyz/), and [HTMX](https://htmx.org/) with [WebSockets](https://htmx.org/extensions/ws/)
 
-![webpage demo](image.png)
+<img width="724" height="770" alt="webpage demo" src="https://github.com/user-attachments/assets/99dcd5f8-9124-43c7-b4bd-069627ccd464" />
 
 ## Features
 
