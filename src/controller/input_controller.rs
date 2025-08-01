@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
 use color_eyre::Result;
-use maud::{Markup, html};
+use maud::{Markup, Render, html};
 use tokio::sync::RwLock;
 
-use crate::{
-    controller::game_controller::GameController,
-    model::{game_state::GameState, message::Message},
-};
+use crate::{controller::game_controller::GameController, model::game_state::GameState};
 
 pub struct InputController {
     game_controller: Arc<GameController>,
@@ -26,21 +23,8 @@ impl InputController {
         let mut state = game_state.write().await;
 
         match self.game_controller.process_guess(&mut state, input).await {
-            Ok(_) => Ok(self.render_game_state(&state)),
+            Ok(_) => Ok(state.render()),
             Err(_) => Ok(self.render_error()),
-        }
-    }
-
-    pub fn render_game_state(&self, state: &GameState) -> Markup {
-        let message = Message::new(state.status.clone(), state.secret_word.clone());
-        html! {
-            (state.grid)
-            div id="message-container" {
-                (message)
-            }
-            @if let Some(dialog) = &state.current_dialog {
-                (dialog)
-            }
         }
     }
 

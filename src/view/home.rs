@@ -4,14 +4,15 @@ use crate::model::grid::Grid;
 
 pub async fn root(grid: &Grid) -> Markup {
     html! {
-        div style="display: flex; flex-direction: column; justify-content: center; width: 100%;" {
+        // Placeholder for grid
+        div #grid-container style="display: flex; flex-direction: column; justify-content: center; width: 100%;" {
             (grid)
-            // Placeholder for messages
-            div id="message-container" {
+            // Placeholder for message
+            div #message-container {
 
             }
         }
-        // Placeholder for dialogs
+        // Placeholder for dialog
         div #dialog-container {
 
         }
