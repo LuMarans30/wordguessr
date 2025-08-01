@@ -36,7 +36,7 @@ mod view;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Word length
-    #[clap(short, long, default_value_t = 6)]
+    #[clap(short, long, default_value_t = 5)]
     word_length: usize,
     /// Number of tries
     #[clap(short, long, default_value_t = 6)]
@@ -117,10 +117,8 @@ async fn root_handler(State(state): State<AppState>) -> Html<String> {
 
 async fn render_root(state: &AppState) -> Result<Markup> {
     let game_state = {
-        state
-            .sessions
-            .read()
-            .await
+        let sessions = state.sessions.read().await;
+        sessions
             .get(&Uuid::nil())
             .expect("Can't find init session")
             .clone()
