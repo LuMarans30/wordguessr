@@ -129,8 +129,7 @@ async fn render_root(state: &AppState) -> Result<Markup> {
 
     let layout = Layout::new(
         root(&grid).await,
-        "WordGuessr".into(),
-        "💬 WordGuessr".into(),
+        "WordGuessr".into()
     );
     Ok(layout.render())
 }
@@ -242,8 +241,7 @@ fn render_error_page(message: &str) -> Markup {
                 }
             }
         },
-        "Error - WordGuessr".into(),
-        "💬 WordGuessr - Error".into(),
+        "Error".into(),
     );
     layout.render()
 }

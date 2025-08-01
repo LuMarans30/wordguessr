@@ -1,6 +1,6 @@
 use crate::{model::game_state::GameStatus, service::dictionary::Word};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Message {
     pub status: GameStatus,
     pub secret_word: Word,

@@ -21,7 +21,7 @@ impl Render for Cell {
                     maxlength="1"
                     required
                     disabled[self.is_disabled]
-                    style={"flex: 1; max-width: 60px; text-align: center; background-color: "(cell_color)";"}
+                    style={"flex: 1; max-width: 60px; text-align: center; background-color: "(cell_color)"; font-weight: bolder; font-size: 1.5rem; font-family: monospace"}
                     oninput="this.value = this.value.toUpperCase().replace(/[^a-z]/gi, '');";
             }
         }

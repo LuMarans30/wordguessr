@@ -21,7 +21,6 @@ impl InputController {
         input: Vec<char>,
     ) -> Result<Markup> {
         let mut state = game_state.write().await;
-
         match self.game_controller.process_guess(&mut state, input).await {
             Ok(_) => Ok(state.render()),
             Err(_) => Ok(self.render_error()),
