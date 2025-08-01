@@ -203,15 +203,20 @@ async fn handle_input(state: &AppState, session_id: Uuid, input: RowElements) ->
 async fn handle_reset(state: &AppState, session_id: Uuid) -> Markup {
     let mut sessions = state.sessions.write().await;
     if let Some(game_state) = sessions.get_mut(&session_id) {
-        let new_game_state = state
+        return match state
             .game_controller
             .create_new_game(game_state.num_tries, game_state.word_length)
             .await
-            .expect("Couldn't create a new game");
-
-        *game_state = new_game_state;
-
-        return game_state.render();
+        {
+            Ok(new_game_state) => {
+                *game_state = new_game_state;
+                game_state.render()
+            }
+            Err(e) => {
+                eprintln!("Error creating new game in handle_reset: {e:?}");
+                render_error_page("Failed to create a new game")
+            }
+        };
     }
 
     render_error_page("Session not found")

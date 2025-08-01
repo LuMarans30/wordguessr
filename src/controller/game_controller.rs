@@ -36,7 +36,9 @@ impl GameController {
         let guess_word: String = guess.iter().collect::<String>().to_ascii_uppercase();
 
         // Validate if the word exists in the dictionary
-        if !self.word_service.validate_word(&guess_word).await? {
+        if !self.word_service.validate_word(&guess_word).await?
+            || guess_word.len() != game_state.secret_word.word.len()
+        {
             return Ok(GuessResult::InvalidWord);
         }
 
