@@ -33,7 +33,10 @@ impl GameController {
             return Ok(GuessResult::GameAlreadyOver);
         }
 
-        let guess_word: String = guess.iter().collect::<String>().to_ascii_uppercase();
+        let guess_word: String = guess
+            .iter()
+            .map(|c| c.to_ascii_uppercase())
+            .collect::<String>();
 
         // Validate if the word exists in the dictionary
         if !self.word_service.validate_word(&guess_word).await?
@@ -70,11 +73,11 @@ impl GameController {
     }
 
     fn determine_cell_states(&self, guess: &[char], secret: &Word) -> Vec<CellState> {
-        let mut secret: Vec<char> = secret.word.chars().collect();
+        let mut secret_chars: Vec<char> = secret.word.chars().collect();
         let mut states = vec![CellState::Absent; guess.len()];
 
         // Mark correct positions first
-        for (i, (g, s)) in guess.iter().zip(secret.iter_mut()).enumerate() {
+        for (i, (g, s)) in guess.iter().zip(secret_chars.iter_mut()).enumerate() {
             if g == s {
                 states[i] = CellState::Correct;
                 *s = '\0';
@@ -84,10 +87,10 @@ impl GameController {
         // Mark present letters
         for (i, g) in guess.iter().enumerate() {
             if states[i] == CellState::Absent
-                && let Some(j) = secret.iter().position(|s| s == g)
+                && let Some(j) = secret_chars.iter().position(|s| s == g)
             {
                 states[i] = CellState::Present;
-                secret[j] = '\0';
+                secret_chars[j] = '\0';
             }
         }
         states

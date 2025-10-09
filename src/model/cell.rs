@@ -33,7 +33,7 @@ impl Cell {
 impl Display for Cell {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let letter = match self.letter {
-            Some(letter) => letter.into(),
+            Some(letter) => letter.to_string(),
             None => String::new(),
         };
         write!(f, "{letter}")

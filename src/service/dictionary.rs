@@ -28,7 +28,7 @@ where
     Ok(arrays
         .iter()
         .map(|(word, meanings)| {
-            let meanings: Vec<String> = meanings.split("--").map(str::to_string).collect();
+            let meanings: Vec<String> = meanings.split("--").map(String::from).collect();
             Word {
                 word: word.to_string().to_ascii_uppercase(),
                 meanings,
@@ -94,7 +94,7 @@ impl WordService for DictionaryService {
         Ok(self
             .dictionary
             .iter()
-            .filter(|x: &&Word| x.word.len() == length)
+            .filter(|w| w.word.len() == length)
             .cloned()
             .collect())
     }

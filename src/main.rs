@@ -126,7 +126,7 @@ async fn render_root(state: &AppState) -> Result<Markup> {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state.into()))
+    ws.on_upgrade(move |socket| handle_socket(socket, Arc::new(state)))
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
@@ -154,7 +154,10 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         match process_message(&state, msg, session_id).await {
             ControlFlow::Break(()) => break,
             ControlFlow::Continue(html) => {
-                socket.send(Message::Text(html.0.into())).await.unwrap();
+                socket
+                    .send(Message::Text(html.0.into()))
+                    .await
+                    .expect("Couldn't send HTML page");
             }
         }
     }
@@ -173,7 +176,7 @@ async fn process_message(
         _ => return ControlFlow::Continue(Html(String::new())),
     };
 
-    let markup = if is_reset_request(&msg) {
+    let markup = if msg.contains("\"reset\"") {
         handle_reset(state, session_id).await
     } else if let Ok(input) = serde_json::from_str::<RowElements>(&msg) {
         handle_input(state, session_id, input).await
@@ -240,10 +243,4 @@ fn render_error_page(message: &str) -> Markup {
         "Error".into(),
     );
     layout.render()
-}
-
-fn is_reset_request(msg: &str) -> bool {
-    serde_json::from_str::<HashMap<String, serde_json::Value>>(msg)
-        .map(|map| map.contains_key("reset"))
-        .unwrap_or(false)
 }
