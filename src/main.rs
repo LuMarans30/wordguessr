@@ -7,8 +7,8 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
-use clap::{Parser, command};
-use maud::{Markup, Render, html};
+use clap::Parser;
+use maud::{Markup, Render};
 use serde::Deserialize;
 use tokio::sync::RwLock;
 use uuid::Uuid;
