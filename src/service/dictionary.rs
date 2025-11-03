@@ -15,7 +15,7 @@ pub struct WordData {
 // Custom deserializer for json words
 /*
 {
-    "word": "definition",
+    "word": "definition 1 -- definition 2 -- ...",
     ...
 }
 */
